@@ -1,0 +1,7 @@
+# environment
+.env
+# jupyter notebook
+.ipynb_checkpoints
+# misc
+*~
+
