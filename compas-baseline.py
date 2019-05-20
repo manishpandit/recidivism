@@ -15,7 +15,7 @@ all_df = pd.read_csv(all_file)
 y = np.ndarray.astype(all_df.values[:,-1],int)
 
 column_list = [
-    'id', 'sex','age','age_cat',
+    'id', 'sex','race','age','age_cat',
     'juv_fel_count','decile_score','juv_misd_count','juv_other_count',
     'priors_count',
     'decile_score.1', 'score_text', 'v_decile_score', 'v_score_text',
@@ -23,11 +23,13 @@ column_list = [
 ]
 # todo: add categorical variables (race). consider specific analysis for crime category / crime text
 # also should think about meaning of columns with NaN
+races = np.unique(all_df['race'])
 conversion_dict = {
     'sex': { 'Female': 1, 'Male': 0 },
     'age_cat': { 'Less than 25': -1, '25 - 45': 0, 'Greater than 45': 1},
     'score_text': { 'High': 1, 'Low': -1, 'Medium': 0 },
-    'v_score_text': { 'High': 1, 'Low': -1, 'Medium': 0 }
+    'v_score_text': { 'High': 1, 'Low': -1, 'Medium': 0 },
+    'race': dict(map(lambda i: (races[i],i), range(len(races))))
 }
 
 Xy_df = all_df[column_list]

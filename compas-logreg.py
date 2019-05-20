@@ -73,7 +73,7 @@ comp_dataset = BinaryLabelDataset(
 )
 comp_dataset_pred = comp_dataset.copy()
 comp_dataset_pred.labels = test_preds_label
-comp_dataset_pred.scores = test_preds
+comp_dataset_pred.scores = test_preds_label
 
 classified_metric = ClassificationMetric(
     comp_dataset, comp_dataset_pred, unprivileged_groups = unprivileged_groups,
