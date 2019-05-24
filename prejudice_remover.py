@@ -65,7 +65,7 @@ def fairness_metrics_all(test_dataset, test_preds, rs_dict):
 def build_race_sex_dict(dataset):
     rs_arr = np.unique(dataset[['race','sex']],axis=0)
     rs_tuples = list(map(lambda x: tuple(x), rs_arr))
-    forced_others = [(1,1),(5,0),(5,1)]
+    forced_others = [(1,0),(1,1),(5,0),(5,1)]
     rs_dict = {} ; last_male_idx = len(rs_tuples) - len(forced_others) - 2
     idx = 0
     for rs_tuple in rs_tuples:
@@ -110,19 +110,12 @@ def save_test_preds(train_dataset, test_dataset, file_ext, eta=50):
     test_df['label'] = test_preds.labels
     test_df.to_csv('prejremover-' + str(file_ext) + '.csv', index=False)
 
+def save_test_metrics(arr, etas, file_ext):
+    metric_names = ['Balanced Accuracy','Disparate Impact','Average Odds Difference','Statistical Parity Difference','Equal Opportunity Difference']
+    arr_df = pd.DataFrame(arr)
+    arr_df.rename(index=lambda x: etas[x], columns=lambda x: metric_names[x], inplace=True)
+    arr_df.to_csv('datasets/prejremover-' + str(file_ext) + '-metrics.csv', index_label='eta')
 
-# mapping to race-sex tuples
-rs_names = {
-    0: 'African-American Male',
-    1: 'African-American Female',
-    2: 'Asian Male',
-    3: 'Caucasian Male',
-    4: 'Caucasian Female',
-    5: 'Latino Male',
-    6: 'Latino Female',
-    7: 'Other Male',
-    8: 'Other Female'
-}
 
 # load data
 data_file = 'all-xy.csv'
@@ -134,6 +127,7 @@ Xy_df.groupby('sensitive').count()[['y']] # count of each class
 Xy_df.groupby('sensitive').mean()[['y']] # mean of each class
 class_counts = np.array(Xy_df.groupby('sensitive').count()['y'])
 class_weights = class_counts / np.sum(class_counts)
+Xy_df.drop(columns=['race','sex'],inplace=True)
 
 # prep train/dev datasets
 Xy_train, Xy_test = train_test_split(Xy_df,test_size=0.2,random_state=142)
@@ -148,7 +142,7 @@ test_dataset = BinaryLabelDataset(
 )
 
 # run prejudice remover
-etas = [0,1,5,10,20,50,100,125,150,175,200,250,500,1000,3000,10000]
+etas = [0,1,5,10,20,50,100,125,150,175,200,250,500,1000]
 metric_arr = np.zeros((len(etas),num_sensitive,5))
 for i in range(len(etas)):
     metric_arr[i,:] = run_pr(etas[i], train_dataset, test_dataset, rs_dict)
@@ -161,5 +155,9 @@ plot_results(aam_arr, etas, 'Metrics (African-American Male)')
 plot_results(metric_avg_arr, etas, 'Metrics (Weighted Average, All Classes)')
 
 # save some preds
-save_test_preds(train_dataset, test_dataset, 'eta50', eta=50)
+save_test_preds(train_dataset, test_dataset, 'reg', eta=100)
 save_test_preds(train_dataset, test_dataset, 'baseline', eta=0)
+# save test results over eta
+
+save_test_metrics(aam_arr, etas, 'blackmale')
+save_test_metrics(metric_avg_arr, etas, 'average')
