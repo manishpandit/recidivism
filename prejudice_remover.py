@@ -46,7 +46,7 @@ def run_pr(eta, train_dataset, test_dataset, rs_dict):
     return fairness_metrics_all(test_dataset, test_preds, rs_dict)
 
 def fairness_metrics_all(test_dataset, test_preds, rs_dict):
-    vals = rs_dict.values()
+    vals = set(rs_dict.values())
     fm_arr = np.zeros((len(vals),5))
     sensitives = np.array(test_dataset.protected_attributes)
     td_df = test_dataset.copy() ; tp_df = test_preds.copy()
@@ -75,6 +75,41 @@ def build_race_sex_dict(dataset):
             rs_dict[rs_tuple] = idx
             idx+=1
     return rs_dict
+
+# plot results given len(etas) by len(metrics) array
+def plot_results(arr, etas, ylabel):
+    plt.plot(etas, arr[:,0], label='Balanced Accuracy')
+    plt.plot(etas, arr[:,1], label='Disparate Impact (-)')
+    plt.plot(etas, arr[:,2], label='Average Odds Difference')
+    plt.plot(etas, arr[:,3], label='Statistical Parity Difference')
+    plt.plot(etas, arr[:,4], label='Equal Opportunity Difference')
+    plt.xlabel('Eta (Bias Penalty)')
+    plt.ylabel(ylabel)
+    plt.legend()
+    plt.show()
+
+# generate arr for input to plot results by taking
+# weighted average over all class
+def get_metric_avg(metric_arr, etas, class_weights):
+    metric_avg_arr = np.zeros((len(etas),5))
+    for i in range(len(etas)):
+        M_i = metric_arr[i]
+        avg_metrics = np.dot(np.abs(M_i.T), class_weights)
+        metric_avg_arr[i,:] = avg_metrics
+    return metric_avg_arr
+
+# save some data about the best model
+def save_test_preds(train_dataset, test_dataset, file_ext, eta=50):
+    pr = PrejudiceRemover(eta=eta)
+    pr.fit(train_dataset)
+    test_preds = pr_predict(pr, test_dataset)
+    test_df = pd.DataFrame()
+    test_df['id'] = test_preds.features[:,0]
+    test_df['class'] = test_preds.protected_attributes
+    test_df['score'] = test_preds.scores
+    test_df['label'] = test_preds.labels
+    test_df.to_csv('prejremover-' + str(file_ext) + '.csv', index=False)
+
 
 # mapping to race-sex tuples
 rs_names = {
@@ -113,40 +148,18 @@ test_dataset = BinaryLabelDataset(
 )
 
 # run prejudice remover
-etas = [0,1,5,10,20,50,100,125,150,175,200,250,500,1000]
+etas = [0,1,5,10,20,50,100,125,150,175,200,250,500,1000,3000,10000]
 metric_arr = np.zeros((len(etas),num_sensitive,5))
 for i in range(len(etas)):
     metric_arr[i,:] = run_pr(etas[i], train_dataset, test_dataset, rs_dict)
 
-# find best eta
-metric_avg = np.zeros((len(etas),5))
-for i in range(len(etas)):
-    M_i = metric_arr[i]
-    avg_metrics = np.dot(np.abs(M_i.T), class_weights)
-    print(etas[i],avg_metrics)
-    metric_avg[i,:] = avg_metrics
-
 # plot results
 import matplotlib.pyplot as plt
-
 aam_arr = metric_arr[:,0,:] # all African-American male data
+metric_avg_arr = get_metric_avg(metric_arr, etas, class_weights)
+plot_results(aam_arr, etas, 'Metrics (African-American Male)')
+plot_results(metric_avg_arr, etas, 'Metrics (Weighted Average, All Classes)')
 
-plt.plot(etas, aam_arr[:,0], label='Balanced Accuracy')
-plt.plot(etas, aam_arr[:,1], label='Disparate Impact (-)')
-plt.plot(etas, aam_arr[:,2], label='Average Odds Difference')
-plt.plot(etas, aam_arr[:,3], label='Statistical Parity Difference')
-plt.plot(etas, aam_arr[:,4], label='Equal Opportunity Difference')
-plt.xlabel('Eta (Bias Penalty)')
-plt.ylabel('Metrics (African-American Male)')
-plt.legend()
-plt.show()
-
-plt.plot(etas, metric_avg[:,0], label='Balanced Accuracy')
-plt.plot(etas, metric_avg[:,1], label='Disparate Impact (-)')
-plt.plot(etas, metric_avg[:,2], label='Average Odds Difference')
-plt.plot(etas, metric_avg[:,3], label='Statistical Parity Difference')
-plt.plot(etas, metric_avg[:,4], label='Equal Opportunity Difference')
-plt.xlabel('Eta (Bias Penalty)')
-plt.ylabel('Metrics (Weighted Average, All Classes)')
-plt.legend()
-plt.show()
+# save some preds
+save_test_preds(train_dataset, test_dataset, 'eta50', eta=50)
+save_test_preds(train_dataset, test_dataset, 'baseline', eta=0)
