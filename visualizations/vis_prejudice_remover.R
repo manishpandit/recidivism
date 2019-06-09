@@ -43,8 +43,8 @@ ggsave('visualizations/pr_class_scores.png')
 ad_df <- read_csv('visualizations/NNwithAdversary-woadv.csv')
 ad_df$score <- 1 / (1+exp(-ad_df$score))
 ad_df$class = 0
-ad_df[ad_df$sex == 'male',]$class <- 1
-ad_df[ad_df$sex == 'female',]$class <- 2
+ad_df[ad_df$sex == 'Male',]$class <- 1
+ad_df[ad_df$sex == 'Female',]$class <- 2
 ad_df[ad_df$race == 'White',]$class = ad_df[ad_df$race == 'White',]$class + 2
 ad_df[ad_df$race == 'Hispanic',]$class = ad_df[ad_df$race == 'Hispanic',]$class + 4
 ad_df[ad_df$race == 'Other',]$class = ad_df[ad_df$race == 'Other',]$class + 6
