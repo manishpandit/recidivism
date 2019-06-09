@@ -118,19 +118,27 @@ def save_test_metrics(arr, etas, file_ext):
 
 
 # load data
-data_file = 'all-xy.csv'
+#data_file = 'all-xy.csv'
+data_file = 'all-xy-with-c_desc.csv'
 Xy_df = pd.read_csv(data_file)
+Xy_df.rename({'two_year_recid':'y'},axis='columns', inplace=True)
 rs_dict = build_race_sex_dict(Xy_df) ; num_sensitive = len(set(rs_dict.values()))
 Xy_df['sensitive'] = list(map(lambda x: rs_dict[tuple(x)], Xy_df[['race','sex']].values))
 # show some stats (count,mean) of remaining classes
 Xy_df.groupby('sensitive').count()[['y']] # count of each class
 Xy_df.groupby('sensitive').mean()[['y']] # mean of each class
+yc_means = Xy_df.groupby('c_charge_desc_id').mean()[['y']] # mean of each class
+Xy_df = pd.merge(Xy_df, yc_means, left_on='c_charge_desc_id', right_on='c_charge_desc_id', how='outer', suffixes=('', '_charge_mean'))
 class_counts = np.array(Xy_df.groupby('sensitive').count()['y'])
 class_weights = class_counts / np.sum(class_counts)
 Xy_df.drop(columns=['race','sex'],inplace=True)
-
+# replace charge cluster with one-hot-encoding
+one_hot = pd.get_dummies(Xy_df['c_charge_desc_id'], prefix='charge_id')
+Xy_df = Xy_df.drop(columns='c_charge_desc_id')
+Xy_df = Xy_df.join(one_hot)
 # prep train/dev datasets
 Xy_train, Xy_test = train_test_split(Xy_df,test_size=0.2,random_state=142)
+
 # run prejudice remover algorithms
 train_dataset = BinaryLabelDataset(
     df=Xy_train, favorable_label=0, unfavorable_label = 1,
@@ -142,7 +150,8 @@ test_dataset = BinaryLabelDataset(
 )
 
 # run prejudice remover
-etas = [0,1,5,10,20,50,100,125,150,175,200,250,500,1000]
+#etas = [0,1,5,10,20,50,100,125,150,175,200,250,500,1000]
+etas = [0,1,3,5,10,15,20,25,30,40,50,75,100,125,150,175,200]
 metric_arr = np.zeros((len(etas),num_sensitive,5))
 for i in range(len(etas)):
     metric_arr[i,:] = run_pr(etas[i], train_dataset, test_dataset, rs_dict)
@@ -161,3 +170,6 @@ save_test_preds(train_dataset, test_dataset, 'baseline', eta=0)
 
 save_test_metrics(aam_arr, etas, 'blackmale')
 save_test_metrics(metric_avg_arr, etas, 'average')
+
+# save matrix
+Xy_df.to_csv('all-xy-charge-aug.csv', index=False)
