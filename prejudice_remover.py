@@ -131,11 +131,13 @@ yc_means = Xy_df.groupby('c_charge_desc_id').mean()[['y']] # mean of each class
 Xy_df = pd.merge(Xy_df, yc_means, left_on='c_charge_desc_id', right_on='c_charge_desc_id', how='outer', suffixes=('', '_charge_mean'))
 class_counts = np.array(Xy_df.groupby('sensitive').count()['y'])
 class_weights = class_counts / np.sum(class_counts)
-Xy_df.drop(columns=['race','sex'],inplace=True)
 # replace charge cluster with one-hot-encoding
 one_hot = pd.get_dummies(Xy_df['c_charge_desc_id'], prefix='charge_id')
 Xy_df = Xy_df.drop(columns='c_charge_desc_id')
 Xy_df = Xy_df.join(one_hot)
+Xy_df.to_csv('all-xy-charge-aug2.csv', index=True,index_label='id')
+Xy_df.drop(columns=['race','sex'],inplace=True)
+Xy_df.to_csv('all-xy-charge-aug.csv', index=False)
 # prep train/dev datasets
 Xy_train, Xy_test = train_test_split(Xy_df,test_size=0.2,random_state=142)
 
@@ -172,4 +174,3 @@ save_test_metrics(aam_arr, etas, 'blackmale')
 save_test_metrics(metric_avg_arr, etas, 'average')
 
 # save matrix
-Xy_df.to_csv('all-xy-charge-aug.csv', index=False)
