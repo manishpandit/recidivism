@@ -67,7 +67,7 @@ ggplot(all_df, aes(x=score, y=stat(width*density), fill=model, group=model)) + t
   scale_x_continuous(labels=c(0,0.2,0.4,0.6,0.8,1), breaks=c(0,0.2,0.4,0.6,0.8,1)) +
   geom_vline(data=all_mu, aes(xintercept=grp.mean, col=model), linetype="dashed") + 
   ylab('Percent') + xlab('Prediction')
-ggsave('visualizations/all_class_scores.pdf', width=10, height=5)
+ggsave('visualizations/all_class_scores.pdf', width=12, height=10)
 ggsave('visualizations/all_class_scores2.png', width=11.77, height=9.9)
 
 # part 2, show training run results

@@ -12,28 +12,28 @@ from aif360.datasets import BinaryLabelDataset
 from aif360.metrics import ClassificationMetric
 
 # hyper-parameters
-epochs = 200
+epochs = 800
 batch_size = 1000
 display_freq = 1000
 learning_rate = 1e-4
-alpha = 0.0        #wo adv alpha = 0
-# alpha = 0.06        #wo adv alpha = 0
-K = 10               #do we need to train adv every epoch or every K epoch
-threshold = 0.0
-# threshold = -0.4
+# alpha = 0.0       # alpha set to 0 without adversary
+alpha = 0.008       # alpha set to non-zero with adversary
+# alpha2 = 0.0
+alpha2 = 0.008
+K = 10
+# threshold = 0.0   # threshold for recidivism NN set to 0 without adversary
+threshold = -0.1    # threshold for recidivism NN set to non-0 without adversary
+threshold_adv2 = 0.0
 
-# range 0.3 to
-
-# data dimension
-num_features = 22
-n_classes = 6 # 1 hot vector for the 6 categories for race
+num_features = 33
+n_classes = 6       # 1 hot vector for the 6 categories for race
 n_bias = 1
 
-h1 = 256    ## of nodes in 1st hidden layer in main NN
-h2 = 256    ## of nodes in 2nd hidden layer in main NN
+h1 = 256            ## of nodes in 1st hidden layer in main NN
+h2 = 256            ## of nodes in 2nd hidden layer in main NN
 
-h3 = 100     ## of nodes in 1st hidden layer in adversary1 NN
-h4 = 10
+h3 = 100            ## of nodes in 1st hidden layer in adversary1 NN (predicts race)
+h4 = 10             ## of nodes in 1st hidden layer in adversary2 NN (predicts gender)
 
 def fairness_metrics(classified_metric, log=False): # prints instead of return if log=True
     TPR = classified_metric.true_positive_rate()
@@ -80,17 +80,17 @@ def get_next_batch(x, y, race, sex, id, score, non_black_latino, start, end):
     return x_batch, y_batch, race_batch, sex_batch, id_batch, score_batch, non_black_latino_batch
 
 # load data
-data_file = 'all-xy-with-softmax.csv'
+data_file = 'all-xy-with-aug-softmax.csv'
 Xy_df = pd.read_csv(data_file)
 
 # prep train/dev dataset files - need to do this only one time to maintain same train/validation set
 Xy_train, Xy_valid = train_test_split(Xy_df,test_size=0.2,random_state=142)
-Xy_train.to_csv('all-xy-with-softmax-train.csv')
-Xy_valid.to_csv('all-xy-with-softmax-valid.csv')
+Xy_train.to_csv('all-xy-with-aug-softmax-train.csv')
+Xy_valid.to_csv('all-xy-with-aug-softmax-valid.csv')
 
 # load train and validation data
-train_data_file = 'all-xy-with-softmax-train.csv'
-valid_data_file = 'all-xy-with-softmax-valid.csv'
+train_data_file = 'all-xy-with-aug-softmax-train.csv'
+valid_data_file = 'all-xy-with-aug-softmax-valid.csv'
 
 Xy_train_df = pd.read_csv(train_data_file)
 Xy_valid_df = pd.read_csv(valid_data_file)
@@ -108,13 +108,11 @@ sex_train = np.ndarray.astype(Xy_train_df.values[:,2],int)
 sex_train = np.reshape(sex_train,(len(sex_train),1))
 # print(sex_train)
 #
-race_train = np.ndarray.astype(Xy_train_df.values[:,17:23],int)
+race_train = np.ndarray.astype(Xy_train_df.values[:,28:34],int)
 race_train = np.reshape(race_train,(len(race_train),n_classes))
 # print(race_train)
-# print(type(race_train))
-# print(race_train[1])
 
-blackLatinoMale_train = np.ndarray.astype(Xy_train_df.values[:,16],int)
+blackLatinoMale_train = np.ndarray.astype(Xy_train_df.values[:,27],int)
 blackLatinoMale_train = np.reshape(blackLatinoMale_train,(len(blackLatinoMale_train),1))
 # print(blackLatinoMale_train)
 
@@ -134,11 +132,11 @@ sex_valid = np.ndarray.astype(Xy_valid_df.values[:,2],int)
 sex_valid = np.reshape(sex_valid,(len(sex_valid),1))
 # print(sex_valid)
 
-race_valid = np.ndarray.astype(Xy_valid_df.values[:,17:23],int)
+race_valid = np.ndarray.astype(Xy_valid_df.values[:,28:34],int)
 race_valid = np.reshape(race_valid,(len(race_valid),n_classes))
 # print(race_valid)
 
-blackLatinoMale_valid = np.ndarray.astype(Xy_valid_df.values[:,16],int)
+blackLatinoMale_valid = np.ndarray.astype(Xy_valid_df.values[:,27],int)
 blackLatinoMale_valid = np.reshape(blackLatinoMale_valid,(len(race_valid),1))
 # print(blackLatinoMale_valid)
 
@@ -193,7 +191,7 @@ def fc_layer(x, num_units, name, use_relu=True, use_tanh=False):
     return layer
 
 # save some data about the best model
-def save_valid_preds(id, race, sex, score, y_true, y_pred, error, output_logits_adv, file_ext):
+def save_valid_preds(id, race, sex, score, y_true, y_pred, error, y_pred_race, y_pred_gender, file_ext):
 
     valid_df = pd.DataFrame()
     valid_df['id'] = id.tolist()
@@ -203,21 +201,14 @@ def save_valid_preds(id, race, sex, score, y_true, y_pred, error, output_logits_
     valid_df['true_label'] = y_true.tolist()
     valid_df['predicted_label'] = y_pred.tolist()
     valid_df['true-pred'] = error.tolist()
-    valid_df['score-adv'] = output_logits_adv.tolist()
-
+    valid_df['predicted-race'] = y_pred_race.tolist()
+    valid_df['predicted-sex'] = y_pred_gender.tolist()
     valid_df.to_csv('NNwithAdversary-' + str(file_ext) + '.csv', index=False)
 
-# def save_test_metrics(arr, etas, file_ext):
-#     metric_names = ['Balanced Accuracy','Disparate Impact','Average Odds Difference','Statistical Parity Difference','Equal Opportunity Difference']
-#     arr_df = pd.DataFrame(arr)
-#     arr_df.rename(index=lambda x: etas[x], columns=lambda x: metric_names[x], inplace=True)
-#     arr_df.to_csv('datasets/prejremover-' + str(file_ext) + '-metrics.csv', index_label='eta')
-
-# Create the graph for the linear model
 # Placeholders for inputs (x) and outputs(y)
 x = tf.placeholder(tf.float32, shape=[None, num_features], name='X')
 y = tf.placeholder(tf.float32, shape=[None, 1], name='Y')                           # prediction of main NN is binary class
-multi_class_race = tf.placeholder(tf.float32, shape=[None, n_classes], name='race') # prediction of adv NN is multi class
+multi_class_race = tf.placeholder(tf.float32, shape=[None, n_classes], name='race') # prediction of adv1 NN is multi class
 sex = tf.placeholder(tf.float32, shape=[None, 1], name='sex')
 id = tf.placeholder(tf.float32, shape=[None, 1], name='id')
 score = tf.placeholder(tf.float32, shape=[None, 1], name='score')
@@ -227,7 +218,7 @@ black_latino_male = tf.placeholder(tf.float32, shape=[None, 1], name='black_lati
 fc1 = fc_layer(x, h1, 'FC1', use_relu=False, use_tanh=True)
 fc2 = fc_layer(fc1, h2, 'FC2', use_relu=False, use_tanh=True)
 # Create a fully-connected layer for main NN
-output_logits = fc_layer(fc2, 1, 'OUT', use_relu=False, use_tanh=False)             #prediction of main neural network is single class - recidivated or not
+output_logits = fc_layer(fc2, 1, 'OUT', use_relu=False, use_tanh=False)                 #prediction of main neural network is single class - recidivated or not
 # Network predictions for main NN
 y_pred = tf.cast(output_logits >= threshold, tf.float32)
 
@@ -241,9 +232,9 @@ y_pred_adv = tf.argmax(output_logits_adv, 1)
 # adversary network detecting gender
 fc4 = fc_layer(output_logits, h4, 'FC4', use_relu=False, use_tanh=True)
 # Create a fully-connected layer for adversary network with bias class node as output layer
-output_logits_adv2 = fc_layer(fc4, 1, 'ADV2_OUT', use_relu=False, use_tanh=False) #here sex is bias class
+output_logits_adv2 = fc_layer(fc4, 1, 'ADV2_OUT', use_relu=False, use_tanh=False)       #here sex is bias class
 # adversary network predictions
-y_pred_adv2 = tf.cast(output_logits_adv2 >= threshold, tf.float32)
+y_pred_adv2 = tf.cast(output_logits_adv2 >= threshold_adv2, tf.float32)
 
 # Define the loss function, optimizer, and accuracy for adversary1
 loss_adv = tf.reduce_mean(tf.nn.sparse_softmax_cross_entropy_with_logits(labels=tf.argmax(multi_class_race,1), logits=output_logits_adv))
@@ -258,7 +249,7 @@ correct_prediction_adv2 = tf.equal(y_pred_adv2, sex, name='correct_pred_adv') #a
 accuracy_adv2 = tf.reduce_mean(tf.cast(correct_prediction_adv2, tf.float32), name='accuracy_adv2')
 
 # Define the loss function, optimizer, and accuracy for main nn
-loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=output_logits), name='loss') - (alpha * (loss_adv+loss_adv2))
+loss = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=output_logits), name='loss') - (alpha * loss_adv) - (alpha2 * loss_adv2)
 optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate, name='Adam-op').minimize(loss)
 correct_prediction = tf.equal(y_pred, y, name='correct_pred')
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, tf.float32), name='accuracy')
@@ -295,38 +286,39 @@ for epoch in range(epochs):
         if iteration % display_freq == 0:
             # Calculate and display the batch loss and accuracy
             loss_batch, acc_batch, loss_adv_batch, acc_adv_batch = sess.run([loss, accuracy, loss_adv, accuracy_adv],feed_dict=feed_dict_batch)
-            print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}, \tLoss_adv={1:.2f},\tTraining Adv Accuracy={2:.01%}".
-                  format(iteration, loss_batch, acc_batch, loss_adv, accuracy_adv))
+            print("iter {0:3d}:\t Loss={1:.2f},\tTraining Accuracy={2:.01%}, \tLoss_adv={1:.2f}, \tLoss_adv2={1:.2f}, \tTraining Adv Accuracy={2:.01%}".
+                  format(iteration, loss_batch, acc_batch, loss_adv, loss_adv2, accuracy_adv))
 
     # Run validation after every epoch
     feed_dict_valid = {x: x_valid_norm[:1443], y: y_valid[:1443], multi_class_race: race_valid[:1443], sex: sex_valid[:1443], id: id_valid[:1443], score:score_valid[:1443], black_latino_male: blackLatinoMale_valid[:1443]}
 
-    loss_valid, acc_valid, loss_adv_nn, acc_adv_nn, output_logits_valid, y_pred_valid, output_logits_valid_adv = sess.run([loss, accuracy, loss_adv, accuracy_adv, output_logits, y_pred, output_logits_adv], feed_dict=feed_dict_valid)
-    # print(output_logits_valid)
+    loss_valid, acc_valid, loss_adv_nn, acc_adv_nn, loss_adv2_nn, acc_adv2_nn, output_logits_valid, y_pred_valid, output_logits_valid_adv, y_pred_valid_adv2= sess.run([loss, accuracy, loss_adv, accuracy_adv, loss_adv2, accuracy_adv2, output_logits, y_pred, output_logits_adv, y_pred_adv2], feed_dict=feed_dict_valid)
     print('------------------------------------------------------------------------------------------------------------')
     print("Epoch: {0}, validation loss: {1:.2f}, validation accuracy: {2:.01%}".
           format(epoch + 1, loss_valid, acc_valid))
     print("Epoch: {0}, adversary validation loss: {1:.2f}, adversary validation accuracy: {2:.01%}".
           format(epoch + 1, loss_adv_nn, acc_adv_nn))
+    print("Epoch: {0}, adversary2 validation loss: {1:.2f}, adversary2 validation accuracy: {2:.01%}".
+          format(epoch + 1, loss_adv2_nn, acc_adv2_nn))
     print('------------------------------------------------------------------------------------------------------------')
 
-    # privileged_groups = [{'BlackLatinoMale': 0}]
-    # unprivileged_groups = [{'BlackLatinoMale': 1}]
+    privileged_groups = [{'BlackLatinoMale': 0}]
+    unprivileged_groups = [{'BlackLatinoMale': 1}]
 
     # privileged_groups = [{'sex': 1}]
     # unprivileged_groups = [{'sex': 0}]
 
-    privileged_groups = [{'African-American': 0}]
-    unprivileged_groups = [{'African-American': 1}]
+    # privileged_groups = [{'African-American': 0}]
+    # unprivileged_groups = [{'African-American': 1}]
 
     # privileged_groups = [{'Hispanic': 0}]
     # unprivileged_groups = [{'Hispanic': 1}]
 
     comp_dataset = BinaryLabelDataset(
         df=Xy_valid_df, favorable_label=0, unfavorable_label = 1,
-        # label_names = ['y'], protected_attribute_names = ['BlackLatinoMale'],
+        label_names = ['y'], protected_attribute_names = ['BlackLatinoMale'],
         # label_names = ['y'], protected_attribute_names = ['sex'],
-        label_names=['y'], protected_attribute_names=['African-American'],
+        # label_names=['y'], protected_attribute_names=['African-American'],
         # label_names=['y'], protected_attribute_names=['Hispanic'],
         privileged_protected_attributes = [[0]],
         unprivileged_protected_attributes = [[1]]
@@ -340,6 +332,6 @@ for epoch in range(epochs):
         privileged_groups = privileged_groups)
     fairness_metrics(classified_metric, log=True)
 
-    # save id, true label and prediction after last epoch
+    # # save id, true label and prediction after last epoch
     if epoch == epochs - 1:
-        save_valid_preds(id_valid, race_valid, sex_valid, output_logits_valid, y_valid, y_pred_valid, y_valid-y_pred_valid, output_logits_valid_adv, 'woadv')
+        save_valid_preds(id_valid, np.argmax(race_valid,1), sex_valid, output_logits_valid, y_valid, y_pred_valid, y_valid-y_pred_valid, np.argmax(output_logits_valid_adv,1), y_pred_valid_adv2,'wadv')
