@@ -16,12 +16,19 @@ def min_max_scaling(X):
     return scalar
 
 # load data
-data_file = 'all-xy.csv'
+data_file = 'all-xy-with-c_desc.csv'
 Xy_df = pd.read_csv(data_file)
 # drop sex,race and replace with 1/0
-sensitive = list(map(lambda x: int(x in [1,2,5]), Xy_df['race']))
+#sensitive = list(map(lambda x: int(x in [1,2,5]), Xy_df['race']))
+sensitive = Xy_df['sex']
 Xy_df['sensitive'] = sensitive
-Xy_df.drop(columns=['race','sex'],inplace=True)
+# get into format that works for this script (kinda hacky)
+one_hot = pd.get_dummies(Xy_df['c_charge_desc_id'], prefix='charge_id')
+Xy_df = Xy_df.drop(columns='c_charge_desc_id')
+Xy_df = Xy_df.join(one_hot)
+y = Xy_df['two_year_recid']
+Xy_df.drop(columns=['race','sex','two_year_recid'],inplace=True)
+Xy_df['y'] = y
 
 # prep train/dev datasets
 Xy_train, Xy_test = train_test_split(Xy_df,test_size=0.2,random_state=42)
@@ -71,9 +78,7 @@ unprivileged_groups = [{'sensitive': 0}]
 
 comp_dataset = BinaryLabelDataset(
     df=Xy_test, favorable_label=0, unfavorable_label = 1,
-    label_names = ['y'], protected_attribute_names = ['sensitive'],
-    privileged_protected_attributes = [1],
-    unprivileged_protected_attributes = [0]
+    label_names = ['y'], protected_attribute_names = ['sensitive']
 )
 comp_dataset_pred = comp_dataset.copy()
 comp_dataset_pred.labels = test_preds_label
@@ -90,15 +95,11 @@ from aif360.algorithms.preprocessing.reweighing import Reweighing
 
 cd_train = BinaryLabelDataset(
     df=Xy_train, favorable_label=0, unfavorable_label = 1,
-    label_names = ['y'], protected_attribute_names = ['sensitive'],
-    privileged_protected_attributes = [1],
-    unprivileged_protected_attributes = [0]
+    label_names = ['y'], protected_attribute_names = ['sensitive']
 )
 cd_test = BinaryLabelDataset(
     df=Xy_test, favorable_label=0, unfavorable_label = 1,
-    label_names = ['y'], protected_attribute_names = ['sensitive'],
-    privileged_protected_attributes = [1],
-    unprivileged_protected_attributes = [0]
+    label_names = ['y'], protected_attribute_names = ['sensitive']
 )
 
 RW = Reweighing(unprivileged_groups=unprivileged_groups,
@@ -130,9 +131,7 @@ print('test log-loss: ' + str(test_ll))
 # calculate fairness metrics for rebalanced model
 fair_comp_dataset = BinaryLabelDataset(
     df=Xy_test, favorable_label=0, unfavorable_label = 1,
-    label_names = ['y'], protected_attribute_names = ['sensitive'],
-    privileged_protected_attributes = [1],
-    unprivileged_protected_attributes = [0]
+    label_names = ['y'], protected_attribute_names = ['sensitive']
 )
 fair_comp_dataset_pred = fair_comp_dataset.copy()
 fair_comp_dataset_pred.labels = np.array([fair_test_preds_label]).T

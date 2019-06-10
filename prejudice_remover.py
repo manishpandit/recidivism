@@ -172,5 +172,6 @@ save_test_preds(train_dataset, test_dataset, 'baseline', eta=0)
 
 save_test_metrics(aam_arr, etas, 'blackmale')
 save_test_metrics(metric_avg_arr, etas, 'average')
+save_test_metrics(metric_avg_arr, etas, 'average-old')
 
 # save matrix
