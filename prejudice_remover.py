@@ -12,6 +12,7 @@ def fairness_metrics(classified_metric, log=False): # prints instead of return i
     TPR = classified_metric.true_positive_rate()
     TNR = classified_metric.true_negative_rate()
     bal_acc = np.round(0.5*(TPR+TNR),4)
+    # calculate rest of metrics
     dip = np.round((1/classified_metric.disparate_impact() - 1),4)
     aod = np.round(classified_metric.average_odds_difference(),4)
     spd = np.round(classified_metric.statistical_parity_difference(),4)
@@ -128,7 +129,13 @@ Xy_df['sensitive'] = list(map(lambda x: rs_dict[tuple(x)], Xy_df[['race','sex']]
 Xy_df.groupby('sensitive').count()[['y']] # count of each class
 Xy_df.groupby('sensitive').mean()[['y']] # mean of each class
 yc_means = Xy_df.groupby('c_charge_desc_id').mean()[['y']] # mean of each class
-Xy_df = pd.merge(Xy_df, yc_means, left_on='c_charge_desc_id', right_on='c_charge_desc_id', how='outer', suffixes=('', '_charge_mean'))
+ycs_means = Xy_df.groupby(['c_charge_desc_id','sensitive']).mean()[['y']]
+Xy_df = pd.merge(
+    Xy_df, yc_means, left_on='c_charge_desc_id',
+    right_on='c_charge_desc_id', how='outer', suffixes=('', '_charge_mean'))
+Xy_df = pd.merge(
+    Xy_df, ycs_means, left_on=['c_charge_desc_id','sensitive'], right_on=['c_charge_desc_id','sensitive'], how='outer', suffixes=('', '_charge_sensitive_mean')
+)
 class_counts = np.array(Xy_df.groupby('sensitive').count()['y'])
 class_weights = class_counts / np.sum(class_counts)
 # replace charge cluster with one-hot-encoding
@@ -162,16 +169,16 @@ for i in range(len(etas)):
 import matplotlib.pyplot as plt
 aam_arr = metric_arr[:,0,:] # all African-American male data
 metric_avg_arr = get_metric_avg(metric_arr, etas, class_weights)
-plot_results(aam_arr, etas, 'Metrics (African-American Male)')
+#plot_results(aam_arr, etas, 'Metrics (African-American Male)')
 plot_results(metric_avg_arr, etas, 'Metrics (Weighted Average, All Classes)')
 
 # save some preds
-save_test_preds(train_dataset, test_dataset, 'reg', eta=100)
+save_test_preds(train_dataset, test_dataset, 'reg', eta=50)
 save_test_preds(train_dataset, test_dataset, 'baseline', eta=0)
 # save test results over eta
 
 save_test_metrics(aam_arr, etas, 'blackmale')
 save_test_metrics(metric_avg_arr, etas, 'average')
-save_test_metrics(metric_avg_arr, etas, 'average-old')
+#save_test_metrics(metric_avg_arr, etas, 'average-old')
 
 # save matrix

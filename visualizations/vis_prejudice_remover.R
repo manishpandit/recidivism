@@ -40,14 +40,16 @@ ggsave('visualizations/pr_class_scores.pdf')
 ggsave('visualizations/pr_class_scores.png')
 
 # incorporate adversary data
-ad_df <- read_csv('visualizations/NNwithAdversary-woadv.csv')
-ad_df$score <- 1 / (1+exp(-ad_df$score))
-ad_df$class = 0
-ad_df[ad_df$sex == 'Male',]$class <- 1
-ad_df[ad_df$sex == 'Female',]$class <- 2
-ad_df[ad_df$race == 'White',]$class = ad_df[ad_df$race == 'White',]$class + 2
-ad_df[ad_df$race == 'Hispanic',]$class = ad_df[ad_df$race == 'Hispanic',]$class + 4
-ad_df[ad_df$race == 'Other',]$class = ad_df[ad_df$race == 'Other',]$class + 6
+ad_df <- read_csv('AdversarialDebiasing_WithClustering/NNwithAdversary-wadv.csv')
+ad_df$score <- 1 / (1+exp(-0.4-ad_df$score))
+ad_df$class <- 0
+ad_df[ad_df$sex == 0,]$class <- 1
+ad_df[ad_df$sex == 1,]$class <- 2
+ad_df[ad_df$race == 2,]$class = ad_df[ad_df$race == 2,]$class + 2 # white
+ad_df[ad_df$race == 1,]$class = ad_df[ad_df$race == 1,]$class + 4 # hispanic
+ad_df[ad_df$race == 3,]$class = ad_df[ad_df$race == 3,]$class + 6
+ad_df[ad_df$race == 4,]$class = ad_df[ad_df$race == 4,]$class + 6
+ad_df[ad_df$race == 5,]$class = ad_df[ad_df$race == 5,]$class + 6
 ad_df$class_name <- cnames[ad_df$class]
 ad_df <- data.frame(id=ad_df$id, class=ad_df$class, score=ad_df$score, label=ad_df$true_label, class_name=ad_df$class_name)
 ad_mu <- ddply(ad_df, "class_name", summarize, grp.mean=mean(score))
